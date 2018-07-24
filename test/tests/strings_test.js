@@ -87,8 +87,8 @@ describe("#virtualizeString", () => {
             h('div', {
                 class: {
                     class1: true,
-                    class2: true,
-                    class3: true
+                        class2: true,
+                        class3: true
                 }
             })
         );
@@ -120,14 +120,14 @@ describe("#virtualizeString", () => {
 
     it("should decode HTML entities, since VNodes just deal with text content", () => {
         expect(virtualizeString("<div>&amp; is an ampersand! and &frac12; is 1/2! and &#xA9; is copyright!</div>")).to.deep.equal(
-            h('div', [ '& is an ampersand! and ½ is 1/2! and © is copyright!' ])
+            h('div', ['& is an ampersand! and ½ is 1/2! and © is copyright!'])
         );
         expect(virtualizeString("<a href='http://example.com?test=true&amp;something=false'>Test</a>")).to.deep.equal(
             h('a', {
                 attrs: {
                     href: 'http://example.com?test=true&something=false'
                 }
-            },[
+            }, [
                 'Test'
             ])
         );
@@ -159,4 +159,9 @@ describe("#virtualizeString", () => {
         const vnodes = virtualizeString("<span>foo</span> <span>bar</span>");
         expect(vnodes.length).to.equal(3)
     })
+    it("should keep '/\n' between elements", () => {
+        const vnodes = virtualizeString("<span>foo</span>\n\n\n<span>bar</span>");
+        expect(vnodes.length).to.equal(3)
+        expect(vnodes[1].text).to.equal('\n\n\n')
+    });
 });

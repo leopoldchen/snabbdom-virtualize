@@ -1,8 +1,21 @@
-import parse from 'html-parse-stringify2/lib/parse';
+import htmlparser from 'htmlparser2';
 import h from 'snabbdom/h';
-import { createTextVNode, transformName, unescapeEntities } from './utils';
+import {
+    createTextVNode,
+    transformName,
+    unescapeEntities
+} from './utils';
 
-export default function(html, options = {}) {
+const parseHTML = function (html) {
+    let handler = new htmlparser.DomHandler();
+    let parser = new htmlparser.Parser(handler, {
+        lowerCaseAttributeNames: false
+    });
+    parser.parseComplete(html);
+    return handler.dom;
+}
+
+export default function (html, options = {}) {
 
     const context = options.context || document;
 
@@ -15,34 +28,42 @@ export default function(html, options = {}) {
     const createdVNodes = [];
 
     // Parse the string into the AST and convert to VNodes.
-    const vnodes = convertNodes(parse(html), createdVNodes, context);
+    const vnodes = convertNodes(parseHTML(html), createdVNodes, context);
 
     let res;
     if (!vnodes) {
         // If there are no vnodes but there is string content, then the string
         // must be just text or at least invalid HTML that we should treat as
         // text (since the AST parser didn't find any well-formed HTML).
-        res = toVNode({ type: 'text', content: html }, createdVNodes, context);
-    }
-    else if (vnodes.length === 1) {
+        res = toVNode({
+            type: 'text',
+            content: html
+        }, createdVNodes, context);
+    } else if (vnodes.length === 1) {
         // If there's only one root node, just return it as opposed to an array.
         res = vnodes[0];
-    }
-    else {
+    } else {
         // Otherwise we have an array of VNodes, which we should return.
         res = vnodes;
     }
 
     // Call the 'create' hook for each created node.
-    options.hooks && options.hooks.create && createdVNodes.forEach((node) => { options.hooks.create(node); });
+    options.hooks && options.hooks.create && createdVNodes.forEach((node) => {
+        options.hooks.create(node);
+    });
     return res;
 }
 
 function convertNodes(nodes, createdVNodes, context) {
     if (nodes instanceof Array && nodes.length > 0) {
-        return nodes.map((node) => { return toVNode(node, createdVNodes, context); });
-    }
-    else {
+        let convertedNodes = [];
+        nodes.forEach((node) => {
+            if (node.type !== 'comment') {
+                convertedNodes.push(toVNode(node, createdVNodes, context));
+            }
+        });
+        return convertedNodes
+    } else {
         return undefined;
     }
 }
@@ -50,9 +71,8 @@ function convertNodes(nodes, createdVNodes, context) {
 function toVNode(node, createdVNodes, context) {
     let newNode;
     if (node.type === 'text') {
-        newNode = createTextVNode(node.content, context);
-    }
-    else {
+        newNode = createTextVNode(node.data, context);
+    } else {
         newNode = h(node.name, buildVNodeData(node, context), convertNodes(node.children, createdVNodes, context));
     }
     createdVNodes.push(newNode);
@@ -61,14 +81,16 @@ function toVNode(node, createdVNodes, context) {
 
 function buildVNodeData(node, context) {
     const data = {};
-    if (!node.attrs) {
+    if (!node.attribs) {
         return data;
     }
 
-    const attrs = Object.keys(node.attrs).reduce((memo, name) => {
+    const attrs = Object.keys(node.attribs).reduce((memo, name) => {
         if (name !== 'style' && name !== 'class') {
-            const val = unescapeEntities(node.attrs[name], context);
-            memo ? memo[name] = val : memo = { [name]: val };
+            const val = unescapeEntities(node.attribs[name], context);
+            memo ? memo[name] = val : memo = {
+                [name]: val
+            };
         }
         return memo;
     }, null);
@@ -91,32 +113,34 @@ function buildVNodeData(node, context) {
 
 function parseStyle(node) {
     try {
-        return node.attrs.style.split(';').reduce((memo, styleProp) => {
+        return node.attribs.style.split(';').reduce((memo, styleProp) => {
             const res = styleProp.split(':');
             const name = transformName(res[0].trim());
             if (name) {
                 const val = res[1].replace('!important', '').trim();
-                memo ? memo[name] = val : memo = { [name]: val };
+                memo ? memo[name] = val : memo = {
+                    [name]: val
+                };
             }
             return memo;
         }, null);
-    }
-    catch (e) {
+    } catch (e) {
         return null;
     }
 }
 
 function parseClass(node) {
     try {
-        return node.attrs.class.split(' ').reduce((memo, className) => {
+        return node.attribs.class.split(' ').reduce((memo, className) => {
             className = className.trim();
             if (className) {
-                memo ? memo[className] = true : memo = { [className]: true };
+                memo ? memo[className] = true : memo = {
+                    [className]: true
+                };
             }
             return memo;
         }, null);
-    }
-    catch (e) {
+    } catch (e) {
         return null;
     }
 }
